@@ -1,0 +1,87 @@
+.root {
+    font-family: "Segoe UI", Arial, sans-serif;
+    -fx-font-family: "Segoe UI", Arial, sans-serif;
+    background-color: #f5f5f5;
+    -fx-background-color: #f5f5f5;
+}
+
+.button {
+    background-color: #4285f4;
+    -fx-background-color: #4285f4;
+    color: white;
+    -fx-text-fill: white;
+    font-weight: bold;
+    -fx-font-weight: bold;
+    padding: 5px 10px;
+    -fx-padding: 5 10 5 10;
+    border-radius: 3px;
+    -fx-background-radius: 3;
+}
+
+.button:hover {
+    background-color: #3275e4;
+    -fx-background-color: #3275e4;
+}
+
+.titled-pane {
+    color: #333333;
+    -fx-text-fill: #333333;
+}
+
+.titled-pane > .title {
+    background-color: #e0e0e0;
+    -fx-background-color: #e0e0e0;
+    font-weight: bold;
+    -fx-font-weight: bold;
+}
+
+.label {
+    color: #333333;
+    -fx-text-fill: #333333;
+}
+
+.tab-pane .tab-header-area .tab-header-background {
+    background-color: #e0e0e0;
+    -fx-background-color: #e0e0e0;
+}
+
+.tab-pane .tab {
+    background-color: #d0d0d0;
+    -fx-background-color: #d0d0d0;
+}
+
+.tab-pane .tab:selected {
+    background-color: #f5f5f5;
+    -fx-background-color: #f5f5f5;
+    outline: none;
+    -fx-focus-color: transparent;
+}
+
+.spinner {
+    width: 80px;
+    -fx-pref-width: 80px;
+}
+
+#graphPane {
+    background-color: white;
+    -fx-background-color: white;
+    border-color: #cccccc;
+    -fx-border-color: #cccccc;
+    border-width: 1px;
+    -fx-border-width: 1;
+    min-height: 400px;
+    -fx-min-height: 400px;
+}
+
+#matrixPane {
+    background-color: white;
+    -fx-background-color: white;
+    border-color: #cccccc;
+    -fx-border-color: #cccccc;
+    border-width: 1px;
+    -fx-border-width: 1;
+    min-height: 400px;
+    -fx-min-height: 400px;
+    padding: 10px;
+    -fx-padding: 10;
+}
