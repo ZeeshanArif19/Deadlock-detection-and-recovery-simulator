@@ -476,6 +476,12 @@ public class MainController {
         RadioButton allOrNothingBtn = new RadioButton("All-or-Nothing");
         allOrNothingBtn.setToggleGroup(strategiesGroup);
         
+        RadioButton waitDieBtn = new RadioButton("Wait-Die");
+        waitDieBtn.setToggleGroup(strategiesGroup);
+        
+        RadioButton woundWaitBtn = new RadioButton("Wound-Wait");
+        woundWaitBtn.setToggleGroup(strategiesGroup);
+        
         Button applyBtn = new Button("Apply Strategy");
         applyBtn.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white;");
         
@@ -493,8 +499,12 @@ public class MainController {
                 strategy = DeadlockPrevention.PreventionStrategy.PREEMPTION;
             } else if (timeoutBtn.isSelected()) {
                 strategy = DeadlockPrevention.PreventionStrategy.TIMEOUT;
-            } else {
+            } else if (allOrNothingBtn.isSelected()) {
                 strategy = DeadlockPrevention.PreventionStrategy.ALL_OR_NOTHING;
+            } else if (waitDieBtn.isSelected()) {
+                strategy = DeadlockPrevention.PreventionStrategy.WAIT_DIE;
+            } else {
+                strategy = DeadlockPrevention.PreventionStrategy.WOUND_WAIT;
             }
             
             String result = engine.getDeadlockPrevention().applyPreventionStrategy(strategy);
@@ -516,7 +526,11 @@ public class MainController {
             createStrategyDescription("Timeout", 
                 "Sets time limits on resource requests to prevent indefinite waiting."),
             createStrategyDescription("All-or-Nothing", 
-                "Processes must request all needed resources at once or none at all.")
+                "Processes must request all needed resources at once or none at all."),
+            createStrategyDescription("Wait-Die", 
+                "Older processes wait for resources held by younger processes, while younger processes are aborted when requesting resources held by older processes."),
+            createStrategyDescription("Wound-Wait", 
+                "Older processes preempt resources from younger processes, while younger processes wait for resources held by older processes.")
         );
         
         descriptionsPane.setContent(descriptionsBox);
@@ -527,6 +541,8 @@ public class MainController {
             preemptionBtn,
             timeoutBtn,
             allOrNothingBtn,
+            waitDieBtn,
+            woundWaitBtn,
             applyBtn,
             resultArea
         );
