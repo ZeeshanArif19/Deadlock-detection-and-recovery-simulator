@@ -1,6 +1,5 @@
 package deadlocktoolkit.visualization;
 
-import deadlocktoolkit.core.*;
 import javafx.geometry.Point2D;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
@@ -23,6 +22,9 @@ import javafx.scene.control.ScrollPane;
 import javafx.geometry.Pos;
 import java.util.List;
 import java.util.ArrayList;
+import deadlocktoolkit.core.DeadlockEngine;
+import deadlocktoolkit.core.ResourceAllocationGraph;
+import deadlocktoolkit.core.BankersAlgorithm;
 
 public class VisualizationSystem {
     private DeadlockEngine engine;
@@ -30,8 +32,8 @@ public class VisualizationSystem {
     private Pane matrixPane;
     private Pane statsPane;
     
-    private static final double PROCESS_RADIUS = 30;
-    private static final double RESOURCE_SIZE = 50;
+    private static final double PROCESS_RADIUS = 40; // Increased for better spacing
+    private static final double RESOURCE_SIZE = 60; // Increased for better spacing
     private static final Color PROCESS_COLOR = Color.LIGHTBLUE;
     private static final Color RESOURCE_COLOR = Color.LIGHTGREEN;
     private static final Color DEADLOCKED_COLOR = Color.RED;
@@ -129,15 +131,14 @@ public class VisualizationSystem {
         Point2D[] positions = new Point2D[numProcesses];
         double centerX = graphPane.getWidth() / 2;
         double centerY = graphPane.getHeight() / 2;
-        double radius = Math.min(centerX, centerY) * 0.8;
-        
+        double baseRadius = Math.min(centerX, centerY);
+        double radius = baseRadius * (numProcesses <= 4 ? 0.75 : numProcesses <= 8 ? 0.85 : 0.98);
         for (int i = 0; i < numProcesses; i++) {
             double angle = 2 * Math.PI * i / numProcesses;
             double x = centerX + radius * Math.cos(angle);
             double y = centerY + radius * Math.sin(angle);
             positions[i] = new Point2D(x, y);
         }
-        
         return positions;
     }
     
@@ -145,15 +146,14 @@ public class VisualizationSystem {
         Point2D[] positions = new Point2D[numResources];
         double centerX = graphPane.getWidth() / 2;
         double centerY = graphPane.getHeight() / 2;
-        double radius = Math.min(centerX, centerY) * 0.4;
-        
+        double baseRadius = Math.min(centerX, centerY);
+        double radius = baseRadius * (numResources <= 4 ? 0.45 : numResources <= 8 ? 0.55 : 0.65);
         for (int i = 0; i < numResources; i++) {
             double angle = 2 * Math.PI * i / numResources;
             double x = centerX + radius * Math.cos(angle);
             double y = centerY + radius * Math.sin(angle);
             positions[i] = new Point2D(x, y);
         }
-        
         return positions;
     }
     
@@ -297,17 +297,14 @@ public class VisualizationSystem {
         
         int[] available = engine.getBankersAlgorithm().getAvailableResources();
         int[][] allocation = engine.getBankersAlgorithm().getAllocationMatrix();
-        
         for (int i = 0; i < available.length; i++) {
             int totalAllocated = 0;
             for (int j = 0; j < allocation.length; j++) {
                 totalAllocated += allocation[j][i];
             }
-            
             allocatedSeries.getData().add(new XYChart.Data<>("R" + i, totalAllocated));
             availableSeries.getData().add(new XYChart.Data<>("R" + i, available[i]));
         }
-        
         resourceChart.getData().addAll(allocatedSeries, availableSeries);
         
         // Process status
@@ -326,10 +323,23 @@ public class VisualizationSystem {
         for (int i = 0; i < allocation.length; i++) {
             processGrid.add(new Label("P" + i), 0, i + 1);
             
-            String status = deadlockedProcesses.contains(i) ? "Deadlocked" : "Running";
+            boolean isActive = engine.getBankersAlgorithm().isProcessActive(i);
+            boolean isDeadlocked = deadlockedProcesses.contains(i);
+            String status;
+            String color;
+            if (!isActive) {
+                status = "Terminated";
+                color = "gray";
+            } else if (isDeadlocked) {
+                status = "Deadlocked";
+                color = "red";
+            } else {
+                status = "Running";
+                color = "green";
+            }
+            
             Label statusValueLabel = new Label(status);
-            statusValueLabel.setStyle(deadlockedProcesses.contains(i) ? 
-                                    "-fx-text-fill: red;" : "-fx-text-fill: green;");
+            statusValueLabel.setStyle("-fx-text-fill: " + color + ";");
             processGrid.add(statusValueLabel, 1, i + 1);
             
             int resourcesHeld = 0;

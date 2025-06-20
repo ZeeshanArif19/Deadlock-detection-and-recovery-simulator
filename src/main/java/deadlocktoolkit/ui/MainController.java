@@ -1,7 +1,12 @@
 package deadlocktoolkit.ui;
 
 import deadlocktoolkit.core.*;
+import deadlocktoolkit.core.DeadlockEngine;
+import deadlocktoolkit.core.ScenarioGenerator;
+import deadlocktoolkit.core.DeadlockPrevention;
 import deadlocktoolkit.visualization.*;
+import deadlocktoolkit.ui.MonitoringPanel;
+import deadlocktoolkit.ui.BankersAlgorithmPanel;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -25,7 +30,6 @@ public class MainController {
     private Tab preventionTab;
     private Tab bankersTab;
     private Tab monitoringTab;
-    private Tab performanceTab;
     private int numProcesses = 0;
     private int numResources = 0;
     private ScenarioGenerator scenarioGenerator;
@@ -77,18 +81,21 @@ public class MainController {
         monitoringTab.setContent(createMonitoringPanel());
         monitoringTab.setClosable(false);
         
-        performanceTab = new Tab("Performance");
-        performanceTab.setContent(createPerformancePanel());
-        performanceTab.setClosable(false);
-        
         Tab welcomeTab = new Tab("Welcome");
         welcomeTab.setContent(createWelcomePanel());
         welcomeTab.setClosable(false);
         
-        tabPane.getTabs().addAll(welcomeTab, setupTab, simulationTab, analysisTab, bankersTab, scenariosTab, preventionTab, monitoringTab, performanceTab);
+        tabPane.getTabs().addAll(welcomeTab, setupTab, simulationTab, analysisTab, bankersTab, scenariosTab, preventionTab, monitoringTab);
         
         // Select welcome tab by default
         tabPane.getSelectionModel().select(0);
+        
+        // Add listener to update visualization when Analysis tab is selected
+        tabPane.getSelectionModel().selectedItemProperty().addListener((obs, oldTab, newTab) -> {
+            if (newTab == analysisTab) {
+                visualSystem.updateVisualization();
+            }
+        });
         
         mainView.setCenter(tabPane);
         
@@ -152,7 +159,7 @@ public class MainController {
             numResources = resourceSpinner.getValue();
             int[] available = new int[numResources];
             for (int i = 0; i < numResources; i++) {
-                available[i] = 10; // Default available resources
+                available[i] = 2; // Default available resources
             }
             engine.initialize(numProcesses, numResources, available);
             visualSystem.updateVisualization();
@@ -190,17 +197,22 @@ public class MainController {
         
         Button requestButton = new Button("Request Resource");
         requestButton.setOnAction(e -> {
-            boolean granted = engine.requestResource(
-                processSpinner.getValue(),
-                resourceSpinner.getValue(),
-                unitsSpinner.getValue()
-            );
-            
-            if (!granted) {
-                showAlert("Request Denied", "Resource request would lead to unsafe state.");
+            int pid = processSpinner.getValue();
+            int rid = resourceSpinner.getValue();
+            int units = unitsSpinner.getValue();
+            BankersAlgorithm ba = engine.getBankersAlgorithm();
+            // Pre-validate against Max and Available
+            if (ba.getAllocationMatrix()[pid][rid] + units > ba.getMaxMatrix()[pid][rid]) {
+                showAlert("Invalid Request", "Request exceeds maximum demand.");
+            } else if (units > ba.getAvailableResources()[rid]) {
+                showAlert("Invalid Request", "Not enough available resources.");
+            } else {
+                boolean granted = engine.requestResource(pid, rid, units);
+                if (!granted) {
+                    showAlert("Request Denied", "Resource request would lead to unsafe state.");
+                }
+                visualSystem.updateVisualization();
             }
-            
-            visualSystem.updateVisualization();
         });
         
         grid.add(new Label("Process:"), 0, 0);
@@ -257,15 +269,21 @@ public class MainController {
         Button setButton = new Button("Set Maximum Demand");
         setButton.setOnAction(e -> {
             try {
-                String[] values = demandField.getText().split(",");
+                String[] values = demandField.getText().trim().split("\\s*,\\s*");
+                if (values.length != numResources) {
+                    throw new IllegalArgumentException("Wrong number of values");
+                }
                 int[] demand = new int[numResources];
                 for (int i = 0; i < numResources; i++) {
-                    demand[i] = Integer.parseInt(values[i].trim());
+                    demand[i] = Integer.parseInt(values[i]);
+                    if (demand[i] < 0 || demand[i] > 10) {
+                        throw new IllegalArgumentException("Each value must be between 0 and 10");
+                    }
                 }
                 engine.getBankersAlgorithm().setMaxDemand(processSpinner.getValue(), demand);
                 visualSystem.updateVisualization();
             } catch (Exception ex) {
-                showAlert("Invalid Input", "Please enter comma-separated integers.");
+                showAlert("Invalid Input", "Please enter " + numResources + " comma-separated integers between 0 and 10.");
             }
         });
         
@@ -288,12 +306,6 @@ public class MainController {
         Button resolveButton = new Button("Resolve Deadlocks");
         resolveButton.setOnAction(e -> resolveDeadlocks());
         
-        Button backButton = new Button("Go Back");
-        backButton.setOnAction(e -> navigateBack());
-        
-        Button forwardButton = new Button("Go Forward");
-        forwardButton.setOnAction(e -> navigateForward());
-        
         // Create a tab pane for different analysis views
         TabPane analysisTabPane = new TabPane();
         
@@ -309,7 +321,6 @@ public class MainController {
         
         panel.getChildren().addAll(
             new HBox(10, detectButton, resolveButton),
-            new HBox(10, backButton, forwardButton),
             analysisTabPane
         );
         
@@ -463,12 +474,9 @@ public class MainController {
         
         ToggleGroup strategiesGroup = new ToggleGroup();
         
-        RadioButton resourceOrderingBtn = new RadioButton("Resource Ordering");
-        resourceOrderingBtn.setToggleGroup(strategiesGroup);
-        resourceOrderingBtn.setSelected(true);
-        
         RadioButton preemptionBtn = new RadioButton("Preemption");
         preemptionBtn.setToggleGroup(strategiesGroup);
+        preemptionBtn.setSelected(true);
         
         RadioButton timeoutBtn = new RadioButton("Timeout");
         timeoutBtn.setToggleGroup(strategiesGroup);
@@ -493,9 +501,7 @@ public class MainController {
         applyBtn.setOnAction(e -> {
             DeadlockPrevention.PreventionStrategy strategy;
             
-            if (resourceOrderingBtn.isSelected()) {
-                strategy = DeadlockPrevention.PreventionStrategy.RESOURCE_ORDERING;
-            } else if (preemptionBtn.isSelected()) {
+            if (preemptionBtn.isSelected()) {
                 strategy = DeadlockPrevention.PreventionStrategy.PREEMPTION;
             } else if (timeoutBtn.isSelected()) {
                 strategy = DeadlockPrevention.PreventionStrategy.TIMEOUT;
@@ -519,8 +525,6 @@ public class MainController {
         descriptionsBox.setPadding(new Insets(10));
         
         descriptionsBox.getChildren().addAll(
-            createStrategyDescription("Resource Ordering", 
-                "Ensures resources are requested in a specific order to prevent circular wait."),
             createStrategyDescription("Preemption", 
                 "Allows resources to be forcibly taken from processes when needed to prevent deadlock."),
             createStrategyDescription("Timeout", 
@@ -537,7 +541,6 @@ public class MainController {
         
         strategiesBox.getChildren().addAll(
             strategiesLabel,
-            resourceOrderingBtn,
             preemptionBtn,
             timeoutBtn,
             allOrNothingBtn,
@@ -585,20 +588,6 @@ public class MainController {
     private void resolveDeadlocks() {
         engine.resolveDeadlock();
         visualSystem.updateVisualization();
-    }
-    
-    private void navigateBack() {
-        if (engine.canGoBack()) {
-            engine.goBack();
-            visualSystem.updateVisualization();
-        }
-    }
-    
-    private void navigateForward() {
-        if (engine.canGoForward()) {
-            engine.goForward();
-            visualSystem.updateVisualization();
-        }
     }
     
     private void resetSystem() {
@@ -656,227 +645,6 @@ public class MainController {
         // Create the monitoring panel with the engine
         monitoringPanel = new MonitoringPanel(engine);
         return monitoringPanel.getMainPanel();
-    }
-    
-    private Pane createPerformancePanel() {
-        // Performance analysis panel
-        VBox panel = new VBox(15);
-        panel.setPadding(new Insets(20));
-        panel.setStyle("-fx-background-color: #f8f8f8;");
-        
-        // Title
-        Label titleLabel = new Label("Performance Analysis");
-        titleLabel.setFont(Font.font("System", FontWeight.BOLD, 24));
-        titleLabel.setStyle("-fx-text-fill: #2c3e50;");
-        
-        // Description
-        TextArea descriptionArea = new TextArea(
-            "This panel provides detailed performance metrics for the deadlock detection and prevention algorithms. " +
-            "You can analyze execution times, resource utilization, and compare the efficiency of different approaches."
-        );
-        descriptionArea.setWrapText(true);
-        descriptionArea.setEditable(false);
-        descriptionArea.setPrefHeight(80);
-        descriptionArea.setStyle("-fx-control-inner-background: #f0f0f0; -fx-background-color: #f0f0f0;");
-        
-        // Performance metrics section
-        TitledPane metricsPane = createPerformanceMetricsPane();
-        
-        // Comparison section
-        TitledPane comparisonPane = createAlgorithmComparisonPane();
-        
-        // Add all components to the panel
-        panel.getChildren().addAll(
-            titleLabel,
-            descriptionArea,
-            metricsPane,
-            comparisonPane
-        );
-        
-        return panel;
-    }
-    
-    private TitledPane createPerformanceMetricsPane() {
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.setPadding(new Insets(20));
-        
-        // Labels for metrics
-        Label avgDetectionTimeLabel = new Label("Average Detection Time:");
-        Label maxDetectionTimeLabel = new Label("Maximum Detection Time:");
-        Label avgResolutionTimeLabel = new Label("Average Resolution Time:");
-        Label deadlockFrequencyLabel = new Label("Deadlock Frequency:");
-        Label resourceUtilizationLabel = new Label("Resource Utilization:");
-        
-        // Values for metrics (these would be updated from the PerformanceTracker)
-        Label avgDetectionTimeValue = new Label("0.05 ms");
-        Label maxDetectionTimeValue = new Label("0.12 ms");
-        Label avgResolutionTimeValue = new Label("1.45 ms");
-        Label deadlockFrequencyValue = new Label("2.3 per minute");
-        Label resourceUtilizationValue = new Label("78%");
-        
-        // Style the value labels
-        avgDetectionTimeValue.setStyle("-fx-font-weight: bold;");
-        maxDetectionTimeValue.setStyle("-fx-font-weight: bold;");
-        avgResolutionTimeValue.setStyle("-fx-font-weight: bold;");
-        deadlockFrequencyValue.setStyle("-fx-font-weight: bold;");
-        resourceUtilizationValue.setStyle("-fx-font-weight: bold;");
-        
-        // Add to grid
-        grid.add(avgDetectionTimeLabel, 0, 0);
-        grid.add(avgDetectionTimeValue, 1, 0);
-        grid.add(maxDetectionTimeLabel, 0, 1);
-        grid.add(maxDetectionTimeValue, 1, 1);
-        grid.add(avgResolutionTimeLabel, 0, 2);
-        grid.add(avgResolutionTimeValue, 1, 2);
-        grid.add(deadlockFrequencyLabel, 0, 3);
-        grid.add(deadlockFrequencyValue, 1, 3);
-        grid.add(resourceUtilizationLabel, 0, 4);
-        grid.add(resourceUtilizationValue, 1, 4);
-        
-        // Refresh button
-        Button refreshButton = new Button("Refresh Metrics");
-        refreshButton.setOnAction(e -> {
-            // Update metrics from the PerformanceTracker
-            PerformanceTracker tracker = engine.getPerformanceTracker();
-            if (tracker != null) {
-                avgDetectionTimeValue.setText(String.format("%.2f ms", tracker.getAverageDetectionTime()));
-                maxDetectionTimeValue.setText(String.format("%.2f ms", tracker.getMaxDetectionTime()));
-                avgResolutionTimeValue.setText(String.format("%.2f ms", tracker.getAverageResolutionTime()));
-                deadlockFrequencyValue.setText(String.format("%.1f per minute", tracker.getDeadlockFrequency()));
-                resourceUtilizationValue.setText(String.format("%.0f%%", tracker.getResourceUtilization() * 100));
-                
-                // Show confirmation
-                Alert alert = new Alert(AlertType.INFORMATION);
-                alert.setTitle("Metrics Refreshed");
-                alert.setHeaderText(null);
-                alert.setContentText("Performance metrics have been updated from the tracker.");
-                alert.showAndWait();
-            } else {
-                // Show error
-                Alert alert = new Alert(AlertType.WARNING);
-                alert.setTitle("Metrics Not Available");
-                alert.setHeaderText(null);
-                alert.setContentText("Performance tracker is not initialized. Please run a simulation first.");
-                alert.showAndWait();
-            }
-        });
-        
-        VBox content = new VBox(15);
-        content.getChildren().addAll(grid, refreshButton);
-        
-        TitledPane pane = new TitledPane("Performance Metrics", content);
-        pane.setExpanded(true);
-        return pane;
-    }
-    
-    private TitledPane createAlgorithmComparisonPane() {
-        VBox content = new VBox(15);
-        content.setPadding(new Insets(10));
-        
-        // Algorithm selection
-        HBox selectionBox = new HBox(10);
-        selectionBox.setAlignment(Pos.CENTER_LEFT);
-        
-        Label algorithmLabel = new Label("Select Algorithms to Compare:");
-        
-        CheckBox bankersCheckBox = new CheckBox("Banker's Algorithm");
-        bankersCheckBox.setSelected(true);
-        
-        CheckBox detectionCheckBox = new CheckBox("Detection Algorithm");
-        detectionCheckBox.setSelected(true);
-        
-        CheckBox preventionCheckBox = new CheckBox("Prevention Strategies");
-        
-        selectionBox.getChildren().addAll(
-            algorithmLabel,
-            bankersCheckBox,
-            detectionCheckBox,
-            preventionCheckBox
-        );
-        
-        // Comparison metrics
-        Label comparisonLabel = new Label("Comparison Results:");
-        comparisonLabel.setFont(Font.font("System", FontWeight.BOLD, 14));
-        
-        TextArea comparisonResults = new TextArea(
-            "Banker's Algorithm vs. Detection Algorithm:\n" +
-            "- Banker's is 25% slower but prevents 98% of deadlocks\n" +
-            "- Detection resolves deadlocks faster but allows them to occur\n" +
-            "- Resource utilization is 12% higher with Banker's\n\n" +
-            "Run a comparison with different parameters to see detailed results."
-        );
-        comparisonResults.setWrapText(true);
-        comparisonResults.setEditable(false);
-        comparisonResults.setPrefHeight(120);
-        
-        // Run comparison button
-        Button compareButton = new Button("Run Comparison");
-        compareButton.setOnAction(e -> {
-            // Get selected algorithms
-            List<String> selectedAlgorithms = new ArrayList<>();
-            if (bankersCheckBox.isSelected()) selectedAlgorithms.add("Banker's Algorithm");
-            if (detectionCheckBox.isSelected()) selectedAlgorithms.add("Detection Algorithm");
-            if (preventionCheckBox.isSelected()) selectedAlgorithms.add("Prevention Strategies");
-            
-            if (selectedAlgorithms.size() < 2) {
-                Alert alert = new Alert(AlertType.WARNING);
-                alert.setTitle("Selection Required");
-                alert.setHeaderText(null);
-                alert.setContentText("Please select at least two algorithms to compare.");
-                alert.showAndWait();
-                return;
-            }
-            
-            // Run comparison simulation
-            StringBuilder results = new StringBuilder();
-            
-            // For demonstration, generate some comparison results
-            if (selectedAlgorithms.contains("Banker's Algorithm") && 
-                selectedAlgorithms.contains("Detection Algorithm")) {
-                results.append("Banker's Algorithm vs. Detection Algorithm:\n");
-                results.append("- Banker's average detection time: 0.08ms vs Detection: 0.03ms\n");
-                results.append("- Banker's deadlock prevention rate: 98% vs Detection: 0%\n");
-                results.append("- Banker's resource utilization: 72% vs Detection: 85%\n\n");
-            }
-            
-            if (selectedAlgorithms.contains("Banker's Algorithm") && 
-                selectedAlgorithms.contains("Prevention Strategies")) {
-                results.append("Banker's Algorithm vs. Prevention Strategies:\n");
-                results.append("- Banker's overhead: Medium vs Prevention: Low\n");
-                results.append("- Banker's starvation risk: Low vs Prevention: Medium\n");
-                results.append("- Banker's implementation complexity: High vs Prevention: Medium\n\n");
-            }
-            
-            if (selectedAlgorithms.contains("Detection Algorithm") && 
-                selectedAlgorithms.contains("Prevention Strategies")) {
-                results.append("Detection Algorithm vs. Prevention Strategies:\n");
-                results.append("- Detection recovery time: 1.2ms vs Prevention: N/A\n");
-                results.append("- Detection system impact: High vs Prevention: Medium\n");
-                results.append("- Detection resource overhead: Low vs Prevention: Medium\n");
-            }
-            
-            comparisonResults.setText(results.toString());
-            
-            // Show confirmation
-            Alert alert = new Alert(AlertType.INFORMATION);
-            alert.setTitle("Comparison Complete");
-            alert.setHeaderText(null);
-            alert.setContentText("Algorithm comparison has been completed.");
-            alert.showAndWait();
-        });
-        
-        content.getChildren().addAll(
-            selectionBox,
-            comparisonLabel,
-            comparisonResults,
-            compareButton
-        );
-        
-        TitledPane pane = new TitledPane("Algorithm Comparison", content);
-        pane.setExpanded(true);
-        return pane;
     }
     
     private Pane createWelcomePanel() {

@@ -171,16 +171,12 @@ public class BankersAlgorithmPanel {
         Button requestResourceButton = new Button("Request Resource");
         requestResourceButton.setOnAction(e -> showRequestResourceDialog());
         
-        Button applyToEngineButton = new Button("Apply to Engine");
-        applyToEngineButton.setOnAction(e -> applyToEngine());
-        
         Button resetButton = new Button("Reset Tables");
         resetButton.setOnAction(e -> resetTables());
         
         buttons.getChildren().addAll(
             checkSafetyButton,
             requestResourceButton,
-            applyToEngineButton,
             resetButton
         );
         
@@ -511,31 +507,28 @@ public class BankersAlgorithmPanel {
     private TableCell<ProcessRow, String> createEditableCell(int resourceIndex, String type) {
         return new TableCell<ProcessRow, String>() {
             private TextField textField;
-            
+
             @Override
             public void startEdit() {
                 super.startEdit();
-                
                 if (textField == null) {
                     createTextField();
                 }
-                
                 setGraphic(textField);
                 setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
                 textField.selectAll();
             }
-            
+
             @Override
             public void cancelEdit() {
                 super.cancelEdit();
                 setText(getItem());
                 setContentDisplay(ContentDisplay.TEXT_ONLY);
             }
-            
+
             @Override
-            protected void updateItem(String item, boolean empty) {
+            public void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
-                
                 if (empty) {
                     setText(null);
                     setGraphic(null);
@@ -552,71 +545,79 @@ public class BankersAlgorithmPanel {
                     }
                 }
             }
-            
+
             private void createTextField() {
                 textField = new TextField(getItem());
-                textField.setMinWidth(this.getWidth() - this.getGraphicTextGap() * 2);
-                
                 textField.setOnAction(e -> commitEdit(textField.getText()));
                 textField.focusedProperty().addListener((obs, oldVal, newVal) -> {
                     if (!newVal) {
                         commitEdit(textField.getText());
                     }
                 });
-                
+                // Only allow numeric input and max 10
                 textField.textProperty().addListener((obs, oldVal, newVal) -> {
-                    // Only allow numbers
                     if (!newVal.matches("\\d*")) {
                         textField.setText(newVal.replaceAll("[^\\d]", ""));
+                    } else if (!newVal.isEmpty()) {
+                        try {
+                            int v = Integer.parseInt(newVal);
+                            if (v > 10) {
+                                textField.setText("10");
+                            }
+                        } catch (NumberFormatException ex) {
+                            textField.setText(oldVal);
+                        }
                     }
                 });
             }
-            
+
             @Override
             public void commitEdit(String newValue) {
                 super.commitEdit(newValue);
-                
                 ProcessRow row = getTableView().getItems().get(getIndex());
+                int val = 0;
+                try {
+                    val = Integer.parseInt(newValue);
+                } catch (Exception ignored) {}
+                if (val > 10) val = 10;
                 if (type.equals("allocation")) {
-                    row.setAllocation(resourceIndex, Integer.parseInt(newValue));
+                    row.setAllocation(resourceIndex, val);
                 } else if (type.equals("max")) {
-                    row.setMax(resourceIndex, Integer.parseInt(newValue));
+                    row.setMax(resourceIndex, val);
                 }
-                
-                // Update need values
                 row.updateNeed(resourceIndex);
+                getTableView().refresh();
+                setText(String.valueOf(val));
+                setContentDisplay(ContentDisplay.TEXT_ONLY);
             }
         };
     }
-    
+
     private TableCell<ResourceRow, String> createEditableResourceCell(String type) {
         return new TableCell<ResourceRow, String>() {
             private TextField textField;
-            
+
             @Override
             public void startEdit() {
                 super.startEdit();
-                
                 if (textField == null) {
                     createTextField();
                 }
-                
                 setGraphic(textField);
                 setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
                 textField.selectAll();
             }
-            
+
             @Override
             public void cancelEdit() {
                 super.cancelEdit();
                 setText(getItem());
                 setContentDisplay(ContentDisplay.TEXT_ONLY);
             }
-            
+
             @Override
-            protected void updateItem(String item, boolean empty) {
+            public void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
-                
                 if (empty) {
                     setText(null);
                     setGraphic(null);
@@ -633,36 +634,48 @@ public class BankersAlgorithmPanel {
                     }
                 }
             }
-            
+
             private void createTextField() {
                 textField = new TextField(getItem());
-                textField.setMinWidth(this.getWidth() - this.getGraphicTextGap() * 2);
-                
                 textField.setOnAction(e -> commitEdit(textField.getText()));
                 textField.focusedProperty().addListener((obs, oldVal, newVal) -> {
                     if (!newVal) {
                         commitEdit(textField.getText());
                     }
                 });
-                
+                // Only allow numeric input and max 10
                 textField.textProperty().addListener((obs, oldVal, newVal) -> {
-                    // Only allow numbers
                     if (!newVal.matches("\\d*")) {
                         textField.setText(newVal.replaceAll("[^\\d]", ""));
+                    } else if (!newVal.isEmpty()) {
+                        try {
+                            int v = Integer.parseInt(newVal);
+                            if (v > 10) {
+                                textField.setText("10");
+                            }
+                        } catch (NumberFormatException ex) {
+                            textField.setText(oldVal);
+                        }
                     }
                 });
             }
-            
+
             @Override
             public void commitEdit(String newValue) {
                 super.commitEdit(newValue);
-                
                 ResourceRow row = getTableView().getItems().get(getIndex());
+                int val = 0;
+                try {
+                    val = Integer.parseInt(newValue);
+                } catch (Exception ignored) {}
+                if (val > 10) val = 10;
                 if (type.equals("available")) {
-                    row.setAvailable(Integer.parseInt(newValue));
+                    row.setAvailable(val);
                 } else if (type.equals("total")) {
-                    row.setTotal(Integer.parseInt(newValue));
+                    row.setTotal(val);
                 }
+                setText(String.valueOf(val));
+                setContentDisplay(ContentDisplay.TEXT_ONLY);
             }
         };
     }
@@ -818,48 +831,6 @@ public class BankersAlgorithmPanel {
         });
     }
     
-    private void applyToEngine() {
-        int numProcesses = processData.size();
-        int numResources = resourceData.size();
-        
-        // Get available resources
-        int[] available = new int[numResources];
-        for (int i = 0; i < numResources; i++) {
-            available[i] = resourceData.get(i).getAvailable();
-        }
-        
-        // Initialize the engine
-        engine.initialize(numProcesses, numResources, available);
-        
-        // Set max demand for each process
-        for (int i = 0; i < numProcesses; i++) {
-            ProcessRow row = processData.get(i);
-            int[] maxDemand = new int[numResources];
-            
-            for (int j = 0; j < numResources; j++) {
-                maxDemand[j] = row.getMax(j);
-            }
-            
-            engine.getBankersAlgorithm().setMaxDemand(i, maxDemand);
-        }
-        
-        // Set allocations
-        for (int i = 0; i < numProcesses; i++) {
-            ProcessRow row = processData.get(i);
-            
-            for (int j = 0; j < numResources; j++) {
-                int alloc = row.getAllocation(j);
-                if (alloc > 0) {
-                    // We need to bypass the safety check for this to work
-                    BankersAlgorithm bankers = engine.getBankersAlgorithm();
-                    bankers.allocateResource(i, j, alloc);
-                }
-            }
-        }
-        
-        showAlert("Applied to Engine", "The current state has been applied to the engine.");
-    }
-    
     private void resetTables() {
         int numProcesses = processData.size();
         int numResources = resourceData.size();
@@ -882,6 +853,9 @@ public class BankersAlgorithmPanel {
         // Reset safety status
         safetyStatusLabel.setText("Not checked");
         safetyStatusLabel.setTextFill(Color.BLACK);
+        
+        processTable.refresh();
+        resourceTable.refresh();
     }
     
     private void showAlert(String title, String content) {

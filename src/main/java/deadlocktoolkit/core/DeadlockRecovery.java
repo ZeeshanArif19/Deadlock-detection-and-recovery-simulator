@@ -65,6 +65,9 @@ public class DeadlockRecovery {
         bankersAlg.setMaxMatrix(maxMatrix);
         bankersAlg.setAvailableResources(availableResources);
         
+        // Mark process as terminated
+        bankersAlg.setProcessActive(processId, false);
+        
         // Clear any pending requests in the RAG
         ResourceAllocationGraph rag = engine.getResourceAllocationGraph();
         for (int j = 0; j < availableResources.length; j++) {

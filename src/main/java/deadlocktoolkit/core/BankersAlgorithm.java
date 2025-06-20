@@ -7,6 +7,7 @@ public class BankersAlgorithm {
     private int[][] maxMatrix;
     private int[][] needMatrix;
     private int[] availableResources;
+    private boolean[] processActive;
     
     public BankersAlgorithm(int numProcesses, int numResources, int[] availableResources) {
         this.numProcesses = numProcesses;
@@ -16,6 +17,10 @@ public class BankersAlgorithm {
         this.allocationMatrix = new int[numProcesses][numResources];
         this.maxMatrix = new int[numProcesses][numResources];
         this.needMatrix = new int[numProcesses][numResources];
+        this.processActive = new boolean[numProcesses];
+        for (int i = 0; i < numProcesses; i++) {
+            processActive[i] = true;
+        }
         
         // Initialize need matrix
         updateNeedMatrix();
@@ -153,5 +158,13 @@ public class BankersAlgorithm {
     
     public void setAvailableResources(int[] availableResources) {
         this.availableResources = availableResources;
+    }
+    
+    // Track active/terminated processes
+    public boolean isProcessActive(int processId) {
+        return processActive[processId];
+    }
+    public void setProcessActive(int processId, boolean active) {
+        processActive[processId] = active;
     }
 }
